@@ -30,7 +30,15 @@ async function bootstrap() {
       'API for your Next.js blog - authentication, posts, comments, etc.',
     )
     .setVersion('1.0')
-    // .addBearerAuth()               // ← uncomment later when JWT is ready
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Paste JWT access token',
+      },
+      'access-token',
+    )
     .addTag('auth', 'Authentication endpoints')
     .addTag('users', 'User management')
     // .addTag('posts')               // add more tags as you create modules

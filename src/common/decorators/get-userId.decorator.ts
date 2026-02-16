@@ -3,17 +3,16 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { User } from '@prisma/client';
-import { decode } from 'jsonwebtoken';
 
 export const GetUserId = createParamDecorator(
-  (data, ctx: ExecutionContext): number => {
+  (_data: unknown, ctx: ExecutionContext): number => {
     const request = ctx.switchToHttp().getRequest();
+    const user = request.user as { userId?: number } | undefined;
 
-    const decodedToken = decode(request.cookies?.token) as User | null;
-    if (!decodedToken) {
-      throw new UnauthorizedException('کاربر پیدا نشده است');
+    if (!user?.userId) {
+      throw new UnauthorizedException('User not authenticated');
     }
-    return decodedToken.id;
+
+    return user.userId;
   },
 );

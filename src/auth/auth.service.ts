@@ -9,8 +9,8 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(email: string, pass: string): Promise<any> {
-    return this.usersService.validateUser(email, pass);
+  async validateUser(identifier: string, pass: string): Promise<any> {
+    return this.usersService.validateUser(identifier, pass);
   }
 
   async login(user: any) {
@@ -23,15 +23,33 @@ export class AuthService {
     return {
       access_token: this.jwtService.sign(payload),
       // refresh_token: this.jwtService.sign(payload, { expiresIn: '7d' }), // optional
-      user: { id: user.id, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        phone: user.phone,
+        role: user.role,
+      },
     };
   }
 
-  async register(data: { email: string; password: string; username?: string }) {
+  async register(data: {
+    email: string;
+    password: string;
+    firstName?: string;
+    lastName?: string;
+    username?: string;
+    phone?: string;
+  }) {
     const user = await this.usersService.create(
       data.email,
       data.password,
+      data.firstName,
+      data.lastName,
       data.username,
+      data.phone,
     );
     return this.login(user); // auto-login after register
   }

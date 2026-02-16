@@ -13,7 +13,6 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
   ApiBody,
   ApiCreatedResponse,
   ApiOkResponse,
@@ -21,6 +20,7 @@ import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiBearerAuth,
+  ApiForbiddenResponse,
 } from '@nestjs/swagger';
 
 import { AuthService } from './auth.service';
@@ -28,8 +28,11 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
 import { GetUser } from './decorators/get-user.decorator';
+import { Roles } from './decorators/roles.decorator';
 import { type Response } from 'express';
+import { Role } from '@prisma/client';
 // import { LocalAuthGuard } from './guards/local-auth.guard';
 // import { JwtAuthGuard } from './guards/jwt-auth.guard';
 // import { GetUser } from './decorators/get-user.decorator'; // we'll create this
@@ -57,6 +60,8 @@ export class AuthController {
         user: {
           id: 1,
           email: 'user@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
           username: 'johndoe',
           phone: '+421905123456',
           role: 'USER',
@@ -90,6 +95,8 @@ export class AuthController {
         user: {
           id: 1,
           email: 'user@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
           username: 'johndoe',
           phone: '+421905123456',
           role: 'USER',
@@ -109,7 +116,7 @@ export class AuthController {
   // ────────────────────────────────────────────────
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get current authenticated user profile' })
   @ApiOkResponse({
     description: 'Returns current user data',
@@ -117,6 +124,8 @@ export class AuthController {
       example: {
         id: 1,
         email: 'user@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
         username: 'johndoe',
         phone: '+421905123456',
         role: 'USER',
@@ -127,6 +136,25 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
   getCurrentUser(@GetUser() user: any) {
     return user;
+  }
+
+  @Get('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Admin-only endpoint' })
+  @ApiOkResponse({
+    description: 'Authenticated admin can access this route',
+    schema: {
+      example: {
+        message: 'Admin access granted',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
+  @ApiForbiddenResponse({ description: 'Insufficient permissions' })
+  getAdminOnly() {
+    return { message: 'Admin access granted' };
   }
 
   // ────────────────────────────────────────────────
