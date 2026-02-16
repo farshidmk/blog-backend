@@ -41,7 +41,8 @@ async function bootstrap() {
     )
     .addTag('auth', 'Authentication endpoints')
     .addTag('users', 'User management')
-    // .addTag('posts')               // add more tags as you create modules
+    .addTag('words', 'Word management')
+    .addTag('word-categories', 'Word category management')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

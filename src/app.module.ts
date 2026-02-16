@@ -6,6 +6,8 @@ import { PrismaService } from './prisma/prisma.service';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
+import { WordsModule } from './words/words.module';
+import { WordCategoriesModule } from './word-categories/word-categories.module';
 
 @Module({
   imports: [
@@ -13,6 +15,8 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule, // global
     UsersModule,
     AuthModule,
+    WordsModule,
+    WordCategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
