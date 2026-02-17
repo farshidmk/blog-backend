@@ -11,6 +11,8 @@ async function bootstrap() {
     origin: [
       'http://localhost:3000', // your Next.js dev
       'http://127.0.0.1:3000',
+      'http://localhost:3002', // your current Next.js dev app
+      'http://127.0.0.1:3002',
       // 'https://your-production-domain.com',   // ← add later
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
@@ -66,3 +68,4 @@ async function bootstrap() {
 }
 
 bootstrap();
+

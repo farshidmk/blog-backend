@@ -43,7 +43,7 @@ model Word {
 enum Role {
   USER
   ADMIN
-  Writer
+  WRITER
 }
 
 enum Difficulty {
