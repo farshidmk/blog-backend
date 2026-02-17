@@ -14,13 +14,15 @@ import {
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiOkResponse,
+  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { QueryFilter } from '../common/decorators/queryFilter.decorator';
 import { CreateWordDto } from './dto/create-word.dto';
 import { UpdateWordDto } from './dto/update-word.dto';
 import { WordsService } from './words.service';
@@ -42,9 +44,16 @@ export class WordsController {
   }
 
   @Get()
-  @ApiOkResponse({ description: 'Returns all words' })
-  findAll() {
-    return this.wordsService.findAll();
+  @ApiQuery({
+    name: 'filter',
+    required: false,
+    type: String,
+    description:
+      'LoopBack-style JSON string. Example: {"where":{"difficulty":"easy"},"order":{"id":"DESC"},"skip":0,"take":10}',
+  })
+  @ApiOkResponse({ description: 'Returns words with filtering/sorting/pagination' })
+  findAll(@QueryFilter('Word') filter: Prisma.WordFindManyArgs) {
+    return this.wordsService.findAll(filter);
   }
 
   @Get(':id')

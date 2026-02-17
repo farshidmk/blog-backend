@@ -3,56 +3,42 @@ import {
   createParamDecorator,
   ExecutionContext,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client'; // ← import this
-import { QueryFilterType } from '../types/queryFilter'; // adjust path
+import { Prisma } from '@prisma/client';
+import { QueryFilterType } from '../types/queryFilter';
 
-// Change this type to match your needs
-// Usually: type QueryFilterResult<T> = {
-//   where?: Prisma.Args<T, 'findMany'>['where'];
-//   orderBy?: Prisma.Args<T, 'findMany'>['orderBy'];
-//   skip?: number;
-//   take?: number;
-// }
+type QueryFilterResult = {
+  where?: Record<string, unknown>;
+  orderBy?: Record<string, 'asc' | 'desc'>[];
+  skip?: number;
+  take?: number;
+};
 
-export const QueryFilter = <T extends { new (...args: any[]): any }>(
-  // We use the model class / delegate type, e.g. Prisma.UserDelegate
-  // But most people pass the delegate or just use string model name
-  model: Prisma.ModelName, // ← 'User' | 'Post' | 'Product' etc.
-) =>
-  createParamDecorator((data: unknown, ctx: ExecutionContext) => {
+export const QueryFilter = (model: Prisma.ModelName) =>
+  createParamDecorator((_: unknown, ctx: ExecutionContext): QueryFilterResult => {
     const request = ctx.switchToHttp().getRequest();
-    const filterString = request.query.filter;
+    const rawFilter = request.query?.filter;
 
-    let filter: QueryFilterType<T> = {};
-    if (filterString) {
-      try {
-        filter = JSON.parse(filterString);
-      } catch (err) {
-        throw new BadRequestException('Invalid filter JSON format');
+    let filter: QueryFilterType = {};
+    if (rawFilter !== undefined) {
+      if (typeof rawFilter === 'string') {
+        try {
+          filter = JSON.parse(rawFilter) as QueryFilterType;
+        } catch {
+          throw new BadRequestException('Invalid filter JSON format');
+        }
+      } else if (typeof rawFilter === 'object' && rawFilter !== null) {
+        filter = rawFilter as QueryFilterType;
+      } else {
+        throw new BadRequestException('Invalid filter format');
       }
     }
 
-    // ── Get allowed fields from Prisma Client ────────────────────────────────
-    // This is the recommended way in 2024–2026
-    const prismaClient = request.prisma || globalThis.prisma; // adjust how you access prisma
-    if (!prismaClient) {
-      throw new Error('Prisma client not available in request');
-    }
+    const validFields = getPrismaFieldsForModel(model);
 
-    // Example: prismaClient.user.fields → but better to use runtime introspection or static map
-    // For simplicity we often maintain a map or use a helper function.
-    // Here we'll assume you have access to fields via a helper or hardcode per entity.
+    const where: Record<string, unknown> = {};
+    const orderBy: Record<string, 'asc' | 'desc'>[] = [];
 
-    // === Most maintainable solution: pass fields explicitly or use a map ===
-
-    // For now we'll simulate – replace with real implementation
-    const validFields = getPrismaFieldsForModel(model); // ← implement this!
-
-    const where: Record<string, any> = {};
-    const orderBy: Record<string, 'asc' | 'desc'>[] = []; // Prisma likes array for orderBy
-
-    // WHERE clause
-    if (filter?.where) {
+    if (filter.where) {
       for (const [key, value] of Object.entries(filter.where)) {
         if (!validFields.includes(key)) {
           throw new BadRequestException(`Invalid filter field: ${key}`);
@@ -62,73 +48,133 @@ export const QueryFilter = <T extends { new (...args: any[]): any }>(
       }
     }
 
-    // ORDER clause
-    if (filter?.order) {
-      for (const [key, direction] of Object.entries(filter.order)) {
-        if (!validFields.includes(key)) {
-          throw new BadRequestException(`Invalid sort field: ${key}`);
-        }
+    parseOrder(filter.order, validFields, orderBy);
 
-        const dir = String(direction).toUpperCase() === 'DESC' ? 'desc' : 'asc';
-        orderBy.push({ [key]: dir });
-      }
-    }
+    const skip = toNonNegativeInt(filter.skip, 'skip');
+    const take = toPositiveInt(filter.take, 'take');
 
-    const skip = filter?.skip ? Number(filter.skip) : undefined;
-    const take = filter?.take ? Number(filter.take) : 10;
-
-    // Return Prisma-compatible object
     return {
       where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: orderBy.length > 0 ? orderBy : undefined,
       skip,
       take,
-    } as Prisma.Args<ReturnType<typeof prismaClient>, 'findMany'>;
+    };
   })();
 
-// ── Parse LoopBack-style conditions to Prisma ───────────────────────────────
-function parsePrismaCondition(value: any): any {
+function parsePrismaCondition(value: unknown): unknown {
   if (typeof value !== 'object' || value === null) {
-    return value; // exact match
+    return value;
   }
 
-  const conditions: Record<string, any> = {};
+  const raw = value as Record<string, unknown>;
+  const conditions: Record<string, unknown> = {};
 
-  if ('gt' in value) conditions.gt = value.gt;
-  if ('gte' in value) conditions.gte = value.gte;
-  if ('lt' in value) conditions.lt = value.lt;
-  if ('lte' in value) conditions.lte = value.lte;
-  if ('like' in value) conditions.contains = value.like; // ← note: no % added!
+  if ('gt' in raw) conditions.gt = raw.gt;
+  if ('gte' in raw) conditions.gte = raw.gte;
+  if ('lt' in raw) conditions.lt = raw.lt;
+  if ('lte' in raw) conditions.lte = raw.lte;
+  if ('like' in raw) conditions.contains = raw.like;
+  if ('contains' in raw) conditions.contains = raw.contains;
+  if ('startsWith' in raw) conditions.startsWith = raw.startsWith;
+  if ('endsWith' in raw) conditions.endsWith = raw.endsWith;
+  if ('in' in raw) conditions.in = raw.in;
+  if ('notIn' in raw) conditions.notIn = raw.notIn;
+  if ('equals' in raw) conditions.equals = raw.equals;
+  if ('not' in raw) conditions.not = raw.not;
 
-  // Optional: support more operators
-  if ('contains' in value) conditions.contains = value.contains;
-  if ('startsWith' in value) conditions.startsWith = value.startsWith;
-  if ('endsWith' in value) conditions.endsWith = value.endsWith;
-
-  // You can add in, notIn, equals, not, etc.
-
-  return Object.keys(conditions).length === 1 && 'contains' in conditions
-    ? { contains: conditions.contains } // most common case
-    : conditions;
+  return Object.keys(conditions).length > 0 ? conditions : value;
 }
 
-// Helper – implement according to your needs
 function getPrismaFieldsForModel(modelName: Prisma.ModelName): string[] {
-  // Option A: Hardcode per model (most reliable)
-  const fieldMap: Record<string, string[]> = {
-    User: ['id', 'email', 'name', 'createdAt', 'age', 'role'],
-    Post: ['id', 'title', 'content', 'published', 'authorId'],
-    // ...
+  const prismaAny = Prisma as unknown as {
+    dmmf?: {
+      datamodel?: {
+        models?: Array<{ name: string; fields: Array<{ name: string }> }>;
+      };
+    };
   };
 
-  const fields = fieldMap[modelName];
-  if (!fields) {
-    throw new Error(`No field map defined for model ${modelName}`);
+  const models = prismaAny.dmmf?.datamodel?.models ?? [];
+  const model = models.find((m) => m.name === modelName);
+
+  if (!model) {
+    throw new BadRequestException(
+      `No Prisma metadata found for model: ${modelName}`,
+    );
   }
 
-  return fields;
+  return model.fields.map((f) => f.name);
+}
 
-  // Option B: Runtime reflection (advanced / less type-safe)
-  // const dmmf = prismaClient._runtimeDataModel.models[modelName];
-  // return Object.keys(dmmf.fields);
+function parseOrder(
+  rawOrder: QueryFilterType['order'],
+  validFields: string[],
+  orderBy: Record<string, 'asc' | 'desc'>[],
+) {
+  if (!rawOrder) return;
+
+  if (typeof rawOrder === 'string') {
+    parseOrderEntry(rawOrder, validFields, orderBy);
+    return;
+  }
+
+  if (Array.isArray(rawOrder)) {
+    for (const entry of rawOrder) {
+      parseOrderEntry(entry, validFields, orderBy);
+    }
+    return;
+  }
+
+  for (const [field, direction] of Object.entries(rawOrder)) {
+    if (!validFields.includes(field)) {
+      throw new BadRequestException(`Invalid sort field: ${field}`);
+    }
+
+    orderBy.push({ [field]: normalizeDirection(direction) });
+  }
+}
+
+function parseOrderEntry(
+  entry: string,
+  validFields: string[],
+  orderBy: Record<string, 'asc' | 'desc'>[],
+) {
+  const [field, rawDirection] = entry.trim().split(/\s+/);
+
+  if (!field || !validFields.includes(field)) {
+    throw new BadRequestException(`Invalid sort field: ${field ?? entry}`);
+  }
+
+  orderBy.push({ [field]: normalizeDirection(rawDirection ?? 'asc') });
+}
+
+function normalizeDirection(value: unknown): 'asc' | 'desc' {
+  const dir = String(value).toLowerCase();
+
+  if (dir === 'asc') return 'asc';
+  if (dir === 'desc') return 'desc';
+
+  throw new BadRequestException('Invalid sort direction. Use ASC or DESC');
+}
+
+function toNonNegativeInt(value: unknown, key: string): number | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new BadRequestException(`${key} must be a non-negative integer`);
+  }
+
+  return parsed;
+}
+
+function toPositiveInt(value: unknown, key: string): number | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new BadRequestException(`${key} must be a positive integer`);
+  }
+
+  return parsed;
 }

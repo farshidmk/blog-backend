@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateWordDto } from './dto/create-word.dto';
 import { UpdateWordDto } from './dto/update-word.dto';
@@ -30,11 +31,38 @@ export class WordsService {
     });
   }
 
-  async findAll() {
-    return this.prisma.word.findMany({
-      include: { wordCategory: true },
-      orderBy: { id: 'asc' },
-    });
+  async findAll(filter: Prisma.WordFindManyArgs = {}) {
+    const skip = filter.skip ?? 0;
+    const take = filter.take ?? 10;
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.word.findMany({
+        where: filter.where,
+        orderBy: filter.orderBy ?? [{ id: 'asc' }],
+        skip,
+        take,
+        include: { wordCategory: true },
+      }),
+      this.prisma.word.count({ where: filter.where }),
+    ]);
+
+    const data = items.map((item) => ({
+      id: item.id,
+      word: item.word,
+      difficulty: item.difficulty,
+      wordCategoryId: item.wordCategoryId,
+      wordCategoryName: item.wordCategory.name,
+    }));
+
+    return {
+      data,
+      meta: {
+        total,
+        skip,
+        take,
+        count: data.length,
+      },
+    };
   }
 
   async findOne(id: number) {
