@@ -8,6 +8,10 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { WordsModule } from './words/words.module';
 import { WordCategoriesModule } from './word-categories/word-categories.module';
+import { ExercisesModule } from './exercises/exercises.module';
+import { WorkoutPlansModule } from './workout-plans/workout-plans.module';
+import { UserWorkoutPlansModule } from './user-workout-plans/user-workout-plans.module';
+import { WorkoutSessionsModule } from './workout-sessions/workout-sessions.module';
 
 @Module({
   imports: [
@@ -17,6 +21,10 @@ import { WordCategoriesModule } from './word-categories/word-categories.module';
     AuthModule,
     WordsModule,
     WordCategoriesModule,
+    ExercisesModule,
+    WorkoutPlansModule,
+    UserWorkoutPlansModule,
+    WorkoutSessionsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

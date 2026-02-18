@@ -8,16 +8,19 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  firstName String?
-  lastName  String?
-  username  String?  @unique
-  password  String
-  phone     String? // ← added (optional)
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  Int               @id @default(autoincrement())
+  email               String            @unique
+  firstName           String?
+  lastName            String?
+  username            String?           @unique
+  password            String
+  phone               String?
+  role                Role              @default(USER)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  createdWorkoutPlans WorkoutPlan[]     @relation("CreatedWorkoutPlans")
+  userWorkoutPlans    UserWorkoutPlan[]
+  workoutSessions     WorkoutSession[]
 
   @@map("users")
 }
@@ -40,6 +43,119 @@ model Word {
   @@map("words")
 }
 
+model Exercise {
+  id               Int                   @id @default(autoincrement())
+  name             String
+  sourceUrl        String?               @unique
+  difficulty       Difficulty?
+  primaryMuscle    Muscle?
+  secondaryMuscles Muscle[]              @default([])
+  workoutType      String?
+  place            String?
+  equipment        String?
+  videoUrl         String?
+  steps            String[]              @default([])
+  isActive         Boolean               @default(true)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  planExercises    WorkoutPlanExercise[]
+  setLogs          WorkoutSetLog[]
+
+  @@index([name])
+  @@map("exercises")
+}
+
+model WorkoutPlan {
+  id               Int                   @id @default(autoincrement())
+  title            String
+  description      String?
+  daysPerWeek      Int?
+  createdById      Int?
+  createdBy        User?                 @relation("CreatedWorkoutPlans", fields: [createdById], references: [id])
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  planExercises    WorkoutPlanExercise[]
+  userWorkoutPlans UserWorkoutPlan[]
+  sessions         WorkoutSession[]
+
+  @@index([createdById])
+  @@map("workout_plans")
+}
+
+model WorkoutPlanExercise {
+  id            Int             @id @default(autoincrement())
+  planId        Int
+  exerciseId    Int
+  dayIndex      Int
+  order         Int
+  targetSets    Int?
+  targetRepsMin Int?
+  targetRepsMax Int?
+  targetRestSec Int?
+  notes         String?
+  workoutPlan   WorkoutPlan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  exercise      Exercise        @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  setLogs       WorkoutSetLog[]
+
+  @@unique([planId, dayIndex, order], map: "workout_plan_exercises_plan_day_order_key")
+  @@unique([planId, dayIndex, exerciseId], map: "workout_plan_exercises_plan_day_exercise_key")
+  @@index([planId, dayIndex], map: "workout_plan_exercises_plan_day_idx")
+  @@map("workout_plan_exercises")
+}
+
+model UserWorkoutPlan {
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  planId    Int
+  startDate DateTime
+  endDate   DateTime?
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      WorkoutPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([userId, isActive], map: "user_workout_plans_user_active_idx")
+  @@index([userId, startDate], map: "user_workout_plans_user_start_idx")
+  @@map("user_workout_plans")
+}
+
+model WorkoutSession {
+  id         Int             @id @default(autoincrement())
+  userId     Int
+  planId     Int?
+  dayIndex   Int?
+  startedAt  DateTime        @default(now())
+  finishedAt DateTime?
+  notes      String?
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan       WorkoutPlan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  setLogs    WorkoutSetLog[]
+
+  @@index([userId, startedAt], map: "workout_sessions_user_started_idx")
+  @@index([planId], map: "workout_sessions_plan_idx")
+  @@map("workout_sessions")
+}
+
+model WorkoutSetLog {
+  id             Int                  @id @default(autoincrement())
+  sessionId      Int
+  exerciseId     Int
+  planExerciseId Int?
+  setNumber      Int
+  reps           Int?
+  weightKg       Decimal?             @db.Decimal(6, 2)
+  notes          String?
+  createdAt      DateTime             @default(now())
+  session        WorkoutSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise       Exercise             @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  planExercise   WorkoutPlanExercise? @relation(fields: [planExerciseId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, exerciseId, setNumber], map: "workout_set_logs_session_exercise_set_key")
+  @@index([exerciseId, createdAt], map: "workout_set_logs_exercise_created_idx")
+  @@map("workout_set_logs")
+}
+
 enum Role {
   USER
   ADMIN
@@ -50,4 +166,23 @@ enum Difficulty {
   easy
   medium
   hard
+}
+
+enum Muscle {
+  CHEST
+  BACK
+  SHOULDERS
+  BICEPS
+  TRICEPS
+  FOREARMS
+  ABS
+  OBLIQUES
+  QUADRICEPS
+  HAMSTRINGS
+  GLUTES
+  CALVES
+  HIP_FLEXORS
+  ADDUCTORS
+  ABDUCTORS
+  FULL_BODY
 }
